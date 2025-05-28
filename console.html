@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Advanced JavaScript Console</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 10px;
+            background-color: #ffffff;
+            color: #000000;
+        }
+        .container {
+            margin: 0 auto;
+            max-width: 100%;
+        }
+        .input-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 10px;
+        }
+        #exec {
+            background-color: #c8fafc;
+            color: #000000;
+            padding: 8px;
+            font-family: 'Courier New', monospace;
+            outline: none;
+            width: 100%;
+            height: 40vh;
+            resize: none;
+            border: 1px solid #ccc;
+            white-space: pre;
+            overflow-x: auto;
+        }
+        #suggestions {
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            right: 0;
+            background-color: #252526;
+            border: 1px solid #444;
+            border-bottom: none;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+            color: #f0f0f0;
+        }
+        .suggestion-item {
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        .suggestion-item:hover, .suggestion-item.selected {
+            background-color: #37373d;
+        }
+        .button-container {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 5px;
+            gap: 10px;
+        }
+        #btn-run {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            cursor: pointer;
+        }
+        #btn-auto-run {
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            cursor: pointer;
+        }
+        #console {
+            background-color: #1e1e1e;
+            border: 1px solid #444;
+            height: 40vh;
+            overflow-y: auto;
+            padding: 10px;
+            color: #f0f0f0;
+        }
+        #output {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+        #output li {
+            margin-bottom: 5px;
+            white-space: pre-wrap;
+        }
+        .command {
+            color: #4CAF50;
+        }
+        .output {
+            color: #ffffff;
+        }
+        .error {
+            color: #ff5555;
+        }
+        .auto-run-active {
+            background-color: #FF9800 !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Advanced JavaScript Console</h2>
+        <div class="input-container">
+            <textarea id="exec" placeholder="Enter JavaScript code..." autofocus></textarea>
+            <div id="suggestions"></div>
+            <div class="button-container">
+                <button id="btn-auto-run">Auto Run</button>
+                <button id="btn-run">Run</button>
+            </div>
+        </div>
+        <div id="console">
+            <ul id="output"></ul>
+        </div>
+    </div>
+
+    <script>
+        const execInput = document.getElementById('exec');
+        const runButton = document.getElementById('btn-run');
+        const autoRunButton = document.getElementById('btn-auto-run');
+        const outputList = document.getElementById('output');
+        const suggestionsBox = document.getElementById('suggestions');
+        
+        let autoRunEnabled = false;
+        let autoRunTimeout = null;
+        
+        // JavaScript keywords and common methods
+        const jsSuggestions = [
+            // Keywords
+            'break', 'case', 'catch', 'class', 'const', 'continue', 'debugger', 'default',
+            'delete', 'do', 'else', 'export', 'extends', 'finally', 'for', 'function', 'if',
+            'import', 'in', 'instanceof', 'let', 'new', 'return', 'super', 'switch', 'this',
+            'throw', 'try', 'typeof', 'var', 'void', 'while', 'with', 'yield', 'async', 'await',
+            
+            // Global objects
+            'Array', 'Boolean', 'Date', 'Error', 'Function', 'JSON', 'Math', 'Number',
+            'Object', 'RegExp', 'String', 'Map', 'Set', 'Promise', 'Proxy', 'Reflect',
+            
+            // Common methods
+            'console.log(', 'console.error(', 'console.warn(', 'console.table(', 'console.group(',
+            'parseInt(', 'parseFloat(', 'isNaN(', 'isFinite(', 'eval(', 
+            'encodeURI(', 'decodeURI(', 'encodeURIComponent(', 'decodeURIComponent(',
+            'setTimeout(', 'setInterval(', 'clearTimeout(', 'clearInterval(',
+            'alert(', 'confirm(', 'prompt(',
+            
+            // Array methods
+            'length', 'push(', 'pop(', 'shift(', 'unshift(', 'concat(', 'join(', 'reverse(',
+            'slice(', 'splice(', 'sort(', 'filter(', 'map(', 'forEach(', 'reduce(', 'find(',
+            'findIndex(', 'some(', 'every(', 'flat(', 'flatMap(', 'includes(', 'indexOf(',
+            
+            // String methods
+            'charAt(', 'charCodeAt(', 'concat(', 'includes(', 'indexOf(', 'lastIndexOf(',
+            'match(', 'replace(', 'search(', 'split(', 'substr(', 'substring(', 'toLowerCase(',
+            'toUpperCase(', 'trim(', 'trimStart(', 'trimEnd(', 'startsWith(', 'endsWith(',
+            'padStart(', 'padEnd(', 'repeat(',
+            
+            // Math methods
+            'Math.abs(', 'Math.ceil(', 'Math.floor(', 'Math.max(', 'Math.min(', 'Math.random(',
+            'Math.round(', 'Math.sqrt(', 'Math.pow(', 'Math.sin(', 'Math.cos(', 'Math.tan(',
+            
+            // DOM methods
+            'document.getElementById(', 'document.querySelector(', 'document.createElement(',
+            'addEventListener(', 'removeEventListener(', 'setAttribute(', 'getAttribute(',
+            'appendChild(', 'removeChild(', 'classList.add(', 'classList.remove(',
+            'querySelectorAll(', 'getElementsByClassName(', 'getElementsByTagName('
+        ].sort();
+        
+        let selectedSuggestionIndex = -1;
+        let currentSuggestions = [];
+        
+        // Save original console.log
+        const originalConsoleLog = console.log;
+        
+        // Override console.log to capture output
+        console.log = function() {
+            originalConsoleLog.apply(console, arguments);
+            const args = Array.from(arguments).map(arg => 
+                typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+            ).join(' ');
+            
+            addOutput(args, 'output');
+        };
+        
+        function addOutput(content, type = 'output') {
+            const li = document.createElement('li');
+            li.className = type;
+            li.textContent = content;
+            outputList.appendChild(li);
+            document.getElementById('console').scrollTop = document.getElementById('console').scrollHeight;
+        }
+        
+        function executeCode() {
+            const code = execInput.value;
+            if (!code.trim()) return;
+            
+            // Display the command
+            addOutput('> ' + code, 'command');
+            
+            try {
+                // Execute the code
+                const result = eval(code);
+                
+                // Display return value if not undefined
+                if (result !== undefined) {
+                    addOutput(result, 'output');
+                }
+            } catch (error) {
+                addOutput(error.toString(), 'error');
+            }
+        }
+        
+        function toggleAutoRun() {
+            autoRunEnabled = !autoRunEnabled;
+            
+            if (autoRunEnabled) {
+                autoRunButton.classList.add('auto-run-active');
+                autoRunButton.textContent = 'Stop Auto Run';
+                // Execute immediately when enabling
+                executeCode();
+            } else {
+                autoRunButton.classList.remove('auto-run-active');
+                autoRunButton.textContent = 'Auto Run';
+                // Clear any pending timeout
+                if (autoRunTimeout) {
+                    clearTimeout(autoRunTimeout);
+                    autoRunTimeout = null;
+                }
+            }
+        }
+        
+        function handleAutoRun() {
+            if (!autoRunEnabled) return;
+            
+            // Clear any pending timeout
+            if (autoRunTimeout) {
+                clearTimeout(autoRunTimeout);
+            }
+            
+            // Set a new timeout to execute after typing stops
+            autoRunTimeout = setTimeout(() => {
+                executeCode();
+                autoRunTimeout = null;
+            }, 1000); // 1 second delay after typing stops
+        }
+        
+        // Auto-complete quotes and parentheses
+        function handleAutoComplete(e) {
+            const pairMap = {
+                '(': ')',
+                '[': ']',
+                '{': '}',
+                "'": "'",
+                '"': '"',
+                '`': '`'
+            };
+            
+            if (pairMap[e.key] && !isTextSelected(execInput)) {
+                e.preventDefault();
+                const start = execInput.selectionStart;
+                const end = execInput.selectionEnd;
+                const text = execInput.value;
+                
+                execInput.value = text.substring(0, start) + e.key + pairMap[e.key] + text.substring(end);
+                execInput.selectionStart = execInput.selectionEnd = start + 1;
+            }
+        }
+        
+        function isTextSelected(input) {
+            return input.selectionStart !== input.selectionEnd;
+        }
+        
+        // Show suggestions based on input
+        function showSuggestions() {
+            const input = execInput.value;
+            const cursorPos = execInput.selectionStart;
+            const textBeforeCursor = input.substring(0, cursorPos);
+            
+            // Extract the current word being typed
+            const wordMatch = textBeforeCursor.match(/([\w\.]+)$/);
+            const lastWord = wordMatch ? wordMatch[0] : '';
+            
+            if (!lastWord) {
+                suggestionsBox.style.display = 'none';
+                return;
+            }
+            
+            currentSuggestions = jsSuggestions.filter(item => 
+                item.toLowerCase().includes(lastWord.toLowerCase())
+            );
+            
+            if (currentSuggestions.length === 0) {
+                suggestionsBox.style.display = 'none';
+                return;
+            }
+            
+            renderSuggestions();
+            suggestionsBox.style.display = 'block';
+        }
+        
+        function renderSuggestions() {
+            suggestionsBox.innerHTML = '';
+            selectedSuggestionIndex = -1;
+            
+            currentSuggestions.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'suggestion-item';
+                div.textContent = item;
+                div.addEventListener('click', () => selectSuggestion(item));
+                suggestionsBox.appendChild(div);
+            });
+        }
+        
+        function selectSuggestion(suggestion) {
+            const input = execInput.value;
+            const cursorPos = execInput.selectionStart;
+            const textBeforeCursor = input.substring(0, cursorPos);
+            
+            // Find the start of the current word
+            const wordMatch = textBeforeCursor.match(/([\w\.]+)$/);
+            const startPos = wordMatch ? cursorPos - wordMatch[0].length : cursorPos;
+            
+            // Insert the suggestion
+            execInput.value = input.substring(0, startPos) + suggestion + 
+                (suggestion.endsWith('(') ? ')' : '') + 
+                input.substring(cursorPos);
+                
+            // Position cursor
+            const newCursorPos = startPos + suggestion.length;
+            execInput.selectionStart = execInput.selectionEnd = newCursorPos;
+            
+            suggestionsBox.style.display = 'none';
+            execInput.focus();
+            
+            // If auto-run is enabled, execute after selection
+            if (autoRunEnabled) {
+                handleAutoRun();
+            }
+        }
+        
+        function navigateSuggestions(direction) {
+            if (!suggestionsBox.style.display || suggestionsBox.style.display === 'none') {
+                return;
+            }
+            
+            const items = suggestionsBox.querySelectorAll('.suggestion-item');
+            if (items.length === 0) return;
+            
+            // Remove previous selection
+            if (selectedSuggestionIndex >= 0) {
+                items[selectedSuggestionIndex].classList.remove('selected');
+            }
+            
+            // Calculate new index
+            if (direction === 'up') {
+                selectedSuggestionIndex = selectedSuggestionIndex <= 0 ? items.length - 1 : selectedSuggestionIndex - 1;
+            } else {
+                selectedSuggestionIndex = selectedSuggestionIndex >= items.length - 1 ? 0 : selectedSuggestionIndex + 1;
+            }
+            
+            // Apply new selection
+            items[selectedSuggestionIndex].classList.add('selected');
+            items[selectedSuggestionIndex].scrollIntoView({ block: 'nearest' });
+        }
+        
+        function acceptSelectedSuggestion() {
+            if (selectedSuggestionIndex >= 0) {
+                const items = suggestionsBox.querySelectorAll('.suggestion-item');
+                selectSuggestion(items[selectedSuggestionIndex].textContent);
+            }
+        }
+        
+        // Event listeners
+        runButton.addEventListener('click', executeCode);
+        autoRunButton.addEventListener('click', toggleAutoRun);
+        
+        execInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                if (suggestionsBox.style.display === 'block') {
+                    acceptSelectedSuggestion();
+                    e.preventDefault();
+                } else {
+                    executeCode();
+                    e.preventDefault();
+                }
+            }
+            
+            // Handle arrow keys for suggestion navigation
+            if (e.key === 'ArrowUp') {
+                navigateSuggestions('up');
+                e.preventDefault();
+            } else if (e.key === 'ArrowDown') {
+                navigateSuggestions('down');
+                e.preventDefault();
+            } else if (e.key === 'Escape') {
+                suggestionsBox.style.display = 'none';
+            } else if (e.key === 'Tab' && suggestionsBox.style.display === 'block') {
+                acceptSelectedSuggestion();
+                e.preventDefault();
+            }
+        });
+        
+        execInput.addEventListener('input', function() {
+            showSuggestions();
+            if (autoRunEnabled) {
+                handleAutoRun();
+            }
+        });
+        
+        // Auto-complete quotes and brackets
+        execInput.addEventListener('keydown', handleAutoComplete);
+        
+        document.addEventListener('click', function(e) {
+            if (e.target !== execInput && e.target !== suggestionsBox) {
+                suggestionsBox.style.display = 'none';
+            }
+        });
+        
+        // Initial message
+        addOutput('// Advanced JavaScript Console Ready. Start typing to see suggestions.', 'output');
+        addOutput('// Use arrow keys to navigate suggestions and Tab/Enter to select.', 'output');
+        addOutput('// Press Shift+Enter for new line, Enter to execute code.', 'output');
+        addOutput('// Click "Auto Run" to execute code automatically as you type.', 'output');
+    </script>
+</body>
+</html>
