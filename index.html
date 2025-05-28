@@ -28,7 +28,7 @@
             padding: 8px;
             font-family: 'Courier New', monospace;
             outline: none;
-            width: 100%;
+            max-width: 100vw;
             height: 40vh;
             resize: none;
             border: 1px solid #ccc;
@@ -37,7 +37,7 @@
         }
         #suggestions {
             position: absolute;
-            bottom: 100%;
+            
             left: 0;
             right: 0;
             background-color: #252526;
@@ -109,7 +109,7 @@
 </head>
 <body>
     <div class="container">
-        <h2>Advanced JavaScript Console</h2>
+        <h2>JavaScript Console</h2>
         <div class="input-container">
             <textarea id="exec" placeholder="Enter JavaScript code..." autofocus></textarea>
             <div id="suggestions"></div>
@@ -181,14 +181,19 @@
         const originalConsoleLog = console.log;
         
         // Override console.log to capture output
-        console.log = function() {
-            originalConsoleLog.apply(console, arguments);
-            const args = Array.from(arguments).map(arg => 
-                typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-            ).join(' ');
-            
-            addOutput(args, 'output');
-        };
+    console.log = function() {
+    originalConsoleLog.apply(console, arguments);
+    const args = Array.from(arguments).map(arg => {
+        if (typeof arg === 'object') {
+            return Array.isArray(arg) 
+                ? `[${arg.join(', ')}]`  // Arrays on one line
+                : JSON.stringify(arg, null, 2);  // Objects with pretty print
+        }
+        return String(arg);
+    }).join(' ');
+    
+    addOutput(args, 'output');
+};
         
         function addOutput(content, type = 'output') {
             const li = document.createElement('li');
@@ -279,32 +284,46 @@
         }
         
         // Show suggestions based on input
-        function showSuggestions() {
-            const input = execInput.value;
-            const cursorPos = execInput.selectionStart;
-            const textBeforeCursor = input.substring(0, cursorPos);
-            
-            // Extract the current word being typed
-            const wordMatch = textBeforeCursor.match(/([\w\.]+)$/);
-            const lastWord = wordMatch ? wordMatch[0] : '';
-            
-            if (!lastWord) {
-                suggestionsBox.style.display = 'none';
-                return;
-            }
-            
-            currentSuggestions = jsSuggestions.filter(item => 
-                item.toLowerCase().includes(lastWord.toLowerCase())
-            );
-            
-            if (currentSuggestions.length === 0) {
-                suggestionsBox.style.display = 'none';
-                return;
-            }
-            
-            renderSuggestions();
-            suggestionsBox.style.display = 'block';
+         function showSuggestions() {
+        const input = execInput.value;
+        const cursorPos = execInput.selectionStart;
+        const textBeforeCursor = input.substring(0, cursorPos);
+        
+        // Find the current line
+        const lines = input.substring(0, cursorPos).split('\n');
+        const currentLine = lines[lines.length - 1];
+        
+        // Extract the current word being typed
+        const wordMatch = currentLine.match(/([\w\.]+)$/);
+        const lastWord = wordMatch ? wordMatch[0] : '';
+        
+        if (!lastWord) {
+            suggestionsBox.style.display = 'none';
+            return;
         }
+        
+        currentSuggestions = jsSuggestions.filter(item => 
+            item.toLowerCase().includes(lastWord.toLowerCase())
+        );
+        
+        if (currentSuggestions.length === 0) {
+            suggestionsBox.style.display = 'none';
+            return;
+        }
+        
+        renderSuggestions();
+        
+        // Position the suggestions box below the current line
+        const lineCount = lines.length;
+        const textareaRect = execInput.getBoundingClientRect();
+        const lineHeight = parseInt(getComputedStyle(execInput).lineHeight) || 20;
+        const paddingTop = parseInt(getComputedStyle(execInput).paddingTop);
+        
+        suggestionsBox.style.position = 'absolute';
+        suggestionsBox.style.left = `${textareaRect.left}px`;
+        suggestionsBox.style.top = `${textareaRect.top + paddingTop + (lineCount * lineHeight)}px`;
+        suggestionsBox.style.display = 'block';
+    }
         
         function renderSuggestions() {
             suggestionsBox.innerHTML = '';
@@ -382,31 +401,50 @@
         runButton.addEventListener('click', executeCode);
         autoRunButton.addEventListener('click', toggleAutoRun);
         
-        execInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                if (suggestionsBox.style.display === 'block') {
-                    acceptSelectedSuggestion();
-                    e.preventDefault();
-                } else {
-                    executeCode();
-                    e.preventDefault();
-                }
-            }
+           execInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        if (suggestionsBox.style.display === 'block') {
+            acceptSelectedSuggestion();
+            e.preventDefault();
+        } else {
+            // Auto-indent new line
+            e.preventDefault();
+            const start = execInput.selectionStart;
+            const end = execInput.selectionEnd;
+            const value = execInput.value;
             
-            // Handle arrow keys for suggestion navigation
-            if (e.key === 'ArrowUp') {
+            // Get current line's indentation
+            const beforeCursor = value.substring(0, start);
+            const lineStart = beforeCursor.lastIndexOf('\n') + 1;
+            const currentLine = value.substring(lineStart, start);
+            const indent = currentLine.match(/^\s*/)[0];
+            
+            // Insert newline with indentation
+            execInput.value = value.substring(0, start) + '\n' + indent + value.substring(end);
+            
+            // Position cursor
+            execInput.selectionStart = execInput.selectionEnd = start + 1 + indent.length;
+        }
+    }
+    // ... rest of key handling
+     if (e.key === 'ArrowUp') {
+            if (suggestionsBox.style.display === 'block') {
                 navigateSuggestions('up');
                 e.preventDefault();
-            } else if (e.key === 'ArrowDown') {
+            }
+        } else if (e.key === 'ArrowDown') {
+            if (suggestionsBox.style.display === 'block') {
                 navigateSuggestions('down');
                 e.preventDefault();
-            } else if (e.key === 'Escape') {
-                suggestionsBox.style.display = 'none';
-            } else if (e.key === 'Tab' && suggestionsBox.style.display === 'block') {
-                acceptSelectedSuggestion();
-                e.preventDefault();
             }
-        });
+        } else if (e.key === 'Escape') {
+            suggestionsBox.style.display = 'none';
+            e.preventDefault();
+        } else if (e.key === 'Tab' && suggestionsBox.style.display === 'block') {
+            acceptSelectedSuggestion();
+            e.preventDefault();
+        }
+});
         
         execInput.addEventListener('input', function() {
             showSuggestions();
@@ -425,10 +463,7 @@
         });
         
         // Initial message
-        addOutput('// Advanced JavaScript Console Ready. Start typing to see suggestions.', 'output');
-        addOutput('// Use arrow keys to navigate suggestions and Tab/Enter to select.', 'output');
-        addOutput('// Press Shift+Enter for new line, Enter to execute code.', 'output');
-        addOutput('// Click "Auto Run" to execute code automatically as you type.', 'output');
+        addOutput('// JavaScript Console Ready.......', 'output');
     </script>
 </body>
 </html>
